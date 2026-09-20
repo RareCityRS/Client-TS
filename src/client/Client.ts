@@ -2742,6 +2742,22 @@ export class Client extends GameShell {
                 }
 
                 line++;
+            } else if (type === 9) {
+                if (mouseY > y - 14 && mouseY <= y) {
+                    this.menuOption[this.menuNumEntries] = 'Accept game @whi@' + sender;
+                    this.menuAction[this.menuNumEntries] = MiniMenuAction.ACCEPT_CHALREQ;
+                    this.menuNumEntries++;
+                }
+
+                line++;
+            } else if (type === 10) {
+                if (mouseY > y - 14 && mouseY <= y) {
+                    this.menuOption[this.menuNumEntries] = 'Resume @whi@' + sender;
+                    this.menuAction[this.menuNumEntries] = MiniMenuAction.ACCEPT_RESUMEREQ;
+                    this.menuNumEntries++;
+                }
+
+                line++;
             }
         }
     }
@@ -6482,6 +6498,38 @@ export class Client extends GameShell {
                     if (!ignored && this.chatDisabled === 0) {
                         this.addChat(8, 'wishes to duel with you.', player);
                     }
+                } else if (message.endsWith(':chalreq:')) {
+                    const player: string = message.substring(0, message.indexOf(':'));
+                    const text: string = message.substring(message.indexOf(':') + 1, message.length - 9);
+                    const username = JString.toUserhash(player);
+
+                    let ignored: boolean = false;
+                    for (let i: number = 0; i < this.ignoreCount; i++) {
+                        if (this.ignoreUserhash[i] === username) {
+                            ignored = true;
+                            break;
+                        }
+                    }
+
+                    if (!ignored && this.chatDisabled === 0) {
+                        this.addChat(9, text, player);
+                    }
+                } else if (message.endsWith(':resumereq:')) {
+                    const player: string = message.substring(0, message.indexOf(':'));
+                    const text: string = message.substring(message.indexOf(':') + 1, message.length - 11);
+                    const username = JString.toUserhash(player);
+
+                    let ignored: boolean = false;
+                    for (let i: number = 0; i < this.ignoreCount; i++) {
+                        if (this.ignoreUserhash[i] === username) {
+                            ignored = true;
+                            break;
+                        }
+                    }
+
+                    if (!ignored && this.chatDisabled === 0) {
+                        this.addChat(10, text, player);
+                    }
                 } else {
                     this.addChat(0, message, '');
                 }
@@ -9279,12 +9327,12 @@ export class Client extends GameShell {
             }
         }
 
-        if (action === MiniMenuAction.FRIEND_CHALLENGE) {
+        if (action === MiniMenuAction.ACCEPT_CHALREQ || action === MiniMenuAction.ACCEPT_RESUMEREQ) {
             const option: string = this.menuOption[optionId];
             const tag: number = option.indexOf('@whi@');
 
             if (tag !== -1) {
-                const command: string = 'challenge ' + option.substring(tag + 5).trim();
+                const command: string = 'game ' + option.substring(tag + 5).trim();
                 this.out.p1Enc(ClientProt.CLIENT_CHEAT);
                 this.out.p1(command.length + 1);
                 this.out.pjstr(command);
@@ -9891,15 +9939,6 @@ export class Client extends GameShell {
         }
     }
 
-    private boardgameOpponent(): number {
-        for (let id: number = 0; id < VarpType.list.length; id++) {
-            if (VarpType.list[id] && VarpType.list[id].clientcode === 20) {
-                return this.var[id] | 0;
-            }
-        }
-        return 0;
-    }
-
     // todo: order
     private addSocialOptions(component: IfType): boolean {
         let clientCode: number = component.clientCode;
@@ -9917,12 +9956,6 @@ export class Client extends GameShell {
 
             this.menuOption[this.menuNumEntries] = 'Remove @whi@' + this.friendUsername[clientCode];
             this.menuAction[this.menuNumEntries] = MiniMenuAction.FRIENDLIST_DEL;
-            this.menuNumEntries++;
-
-            const opponent: number = this.boardgameOpponent();
-            const resume: boolean = opponent !== 0 && opponent !== -1 && ((opponent >>> 11) & 0x1fffff) === Number(this.friendUserhash[clientCode] & 0x1fffffn);
-            this.menuOption[this.menuNumEntries] = (resume ? 'Resume match @whi@' : 'Challenge @whi@') + this.friendUsername[clientCode];
-            this.menuAction[this.menuNumEntries] = MiniMenuAction.FRIEND_CHALLENGE;
             this.menuNumEntries++;
 
             this.menuOption[this.menuNumEntries] = 'Message @whi@' + this.friendUsername[clientCode];
@@ -11311,6 +11344,18 @@ export class Client extends GameShell {
                 } else if (type === 8 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
                     if (y > 0 && y < 110) {
                         font?.drawString(sender + ' ' + this.chatText[i], 4, y, 0x7e3200);
+                    }
+
+                    line++;
+                } else if (type === 9) {
+                    if (y > 0 && y < 110) {
+                        font?.drawString(sender + ' ' + this.chatText[i], 4, y, 0x7e3200);
+                    }
+
+                    line++;
+                } else if (type === 10) {
+                    if (y > 0 && y < 110) {
+                        font?.drawString(this.chatText[i], 4, y, 0x7e3200);
                     }
 
                     line++;

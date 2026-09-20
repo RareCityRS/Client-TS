@@ -75,5 +75,6 @@ export const enum MiniMenuAction {
     IGNORELIST_DEL = 884,
 
     MESSAGE_PRIVATE = 902,
-    FRIEND_CHALLENGE = 903,
+    ACCEPT_CHALREQ = 903, // opplayer1
+    ACCEPT_RESUMEREQ = 904, // game <name>
 }
