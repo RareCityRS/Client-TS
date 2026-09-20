@@ -56,6 +56,7 @@ export default abstract class GameShell {
     protected async mainloop() { }
     protected async mainredraw() { }
     protected refresh() { }
+    protected onwheel(_e: WheelEvent) { }
 
     constructor(resizetoFit: boolean = false) {
         canvas.tabIndex = -1;
@@ -101,6 +102,7 @@ export default abstract class GameShell {
         canvas.onpointerenter = this.onpointerenter.bind(this);
         canvas.onpointerleave = this.onpointerleave.bind(this);
         canvas.onpointermove = this.onpointermove.bind(this);
+        canvas.onwheel = this.onwheel.bind(this);
         window.onmouseup = this.windowMouseUp.bind(this);
         window.onmousemove = this.windowMouseMove.bind(this);
 
@@ -244,6 +246,7 @@ export default abstract class GameShell {
         canvas.onpointerenter = null;
         canvas.onpointerleave = null;
         canvas.onpointermove = null;
+        canvas.onwheel = null;
         canvas.removeEventListener('touchend', this.touchEndHandler);
         canvas.oncontextmenu = null;
         window.onmouseup = null;

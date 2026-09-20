@@ -46,7 +46,7 @@ import { Int32Array2d, TypedArray1d, TypedArray3d, Int32Array3d, Uint8Array3d } 
 import { downloadUrl, sleep } from '#/util/JsUtil.js';
 
 import AnimFrame from '#/dash3d/AnimFrame.js';
-import { canvas2d } from '#/graphics/Canvas.js';
+import { canvas, canvas2d } from '#/graphics/Canvas.js';
 import { Colour } from '#/graphics/Colour.js';
 import Pix2D from '#/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
@@ -344,6 +344,9 @@ export class Client extends GameShell {
     private camZ: number = 0;
     private camPitch: number = 0;
     private camYaw: number = 0;
+    private cameraZoomEnabled: boolean = true;
+    private cameraZoom: number = 0;
+    private cameraZoomTarget: number = 0;
     private orbitCameraPitch: number = 128;
     private orbitCameraYaw: number = 0;
     private orbitCameraYawVelocity: number = 0;
@@ -1801,6 +1804,8 @@ export class Client extends GameShell {
                 this.mouseTracking.length = 0;
                 this.focus = true;
                 this.focusIn = true;
+                this.cameraZoom = 0;
+                this.cameraZoomTarget = 0;
                 this.ingame = true;
                 this.out.pos = 0;
                 this.in.pos = 0;
@@ -2455,6 +2460,8 @@ export class Client extends GameShell {
         }
 
         this.stream = null;
+        this.cameraZoom = 0;
+        this.cameraZoomTarget = 0;
         this.ingame = false;
         this.loginscreen = 0;
         this.loginUser = '';
@@ -3088,6 +3095,11 @@ export class Client extends GameShell {
                                 } catch (_e) {
                                     // empty
                                 }
+                            } else if (this.chatInput === '::lockzoom') {
+                                const command = this.cameraZoomEnabled ? '::lockzoom lock ' + Math.round(this.cameraZoomTarget) : '::lockzoom off';
+                                this.out.p1Enc(ClientProt.CLIENT_CHEAT);
+                                this.out.p1(command.length - 2 + 1);
+                                this.out.pjstr(command.substring(2));
                             } else if (this.chatInput.startsWith('::')) {
                                 this.out.p1Enc(ClientProt.CLIENT_CHEAT);
                                 this.out.p1(this.chatInput.length - 2 + 1);
@@ -3219,9 +3231,32 @@ export class Client extends GameShell {
         this.debug = true;
     }
 
+    protected onwheel(e: WheelEvent): void {
+        if (!this.ingame || !this.cameraZoomEnabled || this.cinemaCam || this.sceneState !== 2 || this.mainModalId !== -1 || this.isMenuOpen || this.objDragArea !== 0 || e.ctrlKey || e.metaKey || !Number.isFinite(e.deltaY) || e.deltaY === 0) {
+            return;
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * canvas.width / rect.width;
+        const y = (e.clientY - rect.top) * canvas.height / rect.height;
+        if (x <= 4 || x >= 516 || y <= 4 || y >= 338) {
+            return;
+        }
+
+        e.preventDefault();
+        this.idleTimer = performance.now();
+        const pixels = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 334 : 1);
+        this.cameraZoomTarget = Math.max(0, Math.min(600, this.cameraZoomTarget + Math.max(-240, Math.min(240, pixels)) / 2));
+    }
+
     private followCamera(): void {
         if (!this.localPlayer) {
             return; // custom
+        }
+
+        this.cameraZoom += (this.cameraZoomTarget - this.cameraZoom) / 3;
+        if (Math.abs(this.cameraZoomTarget - this.cameraZoom) < 0.1) {
+            this.cameraZoom = this.cameraZoomTarget;
         }
 
         const orbitX: number = this.localPlayer.x + this.macroCameraX;
@@ -4191,7 +4226,7 @@ export class Client extends GameShell {
             const yaw: number = (this.orbitCameraYaw + this.macroCameraAngle) & 0x7ff;
 
             if (this.localPlayer) {
-                this.camFollow(pitch, yaw, this.orbitCameraX, this.getAvH(this.localPlayer.x, this.localPlayer.z, this.minusedlevel) - 50, this.orbitCameraZ, pitch * 3 + 600);
+                this.camFollow(pitch, yaw, this.orbitCameraX, this.getAvH(this.localPlayer.x, this.localPlayer.z, this.minusedlevel) - 50, this.orbitCameraZ, pitch * 3 + 600 + Math.round(this.cameraZoom));
             }
         }
 
@@ -8262,7 +8297,7 @@ export class Client extends GameShell {
             return;
         }
 
-        if (this.isMobile && this.dialogInputOpen && this.insideChatPopup()) {
+        if (this.dialogInputOpen && this.insideChatPopup()) {
             return;
         }
 
@@ -9244,6 +9279,18 @@ export class Client extends GameShell {
             }
         }
 
+        if (action === MiniMenuAction.FRIEND_CHALLENGE) {
+            const option: string = this.menuOption[optionId];
+            const tag: number = option.indexOf('@whi@');
+
+            if (tag !== -1) {
+                const command: string = 'challenge ' + option.substring(tag + 5).trim();
+                this.out.p1Enc(ClientProt.CLIENT_CHEAT);
+                this.out.p1(command.length + 1);
+                this.out.pjstr(command);
+            }
+        }
+
         if (action === MiniMenuAction.MESSAGE_PRIVATE) {
             const option: string = this.menuOption[optionId];
             const tag: number = option.indexOf('@whi@');
@@ -9844,6 +9891,15 @@ export class Client extends GameShell {
         }
     }
 
+    private boardgameOpponent(): number {
+        for (let id: number = 0; id < VarpType.list.length; id++) {
+            if (VarpType.list[id] && VarpType.list[id].clientcode === 20) {
+                return this.var[id] | 0;
+            }
+        }
+        return 0;
+    }
+
     // todo: order
     private addSocialOptions(component: IfType): boolean {
         let clientCode: number = component.clientCode;
@@ -9861,6 +9917,12 @@ export class Client extends GameShell {
 
             this.menuOption[this.menuNumEntries] = 'Remove @whi@' + this.friendUsername[clientCode];
             this.menuAction[this.menuNumEntries] = MiniMenuAction.FRIENDLIST_DEL;
+            this.menuNumEntries++;
+
+            const opponent: number = this.boardgameOpponent();
+            const resume: boolean = opponent !== 0 && opponent !== -1 && ((opponent >>> 11) & 0x1fffff) === Number(this.friendUserhash[clientCode] & 0x1fffffn);
+            this.menuOption[this.menuNumEntries] = (resume ? 'Resume match @whi@' : 'Challenge @whi@') + this.friendUsername[clientCode];
+            this.menuAction[this.menuNumEntries] = MiniMenuAction.FRIEND_CHALLENGE;
             this.menuNumEntries++;
 
             this.menuOption[this.menuNumEntries] = 'Message @whi@' + this.friendUsername[clientCode];
@@ -10685,6 +10747,15 @@ export class Client extends GameShell {
             this.redrawChat = true;
         } else if (clientcode === 9) {
             this.bankArrangeMode = value;
+        } else if (clientcode === 21) {
+            // 0 = unlocked, otherwise value-1 = locked zoom amount
+            if (value === 0) {
+                this.cameraZoomEnabled = true;
+            } else {
+                this.cameraZoomEnabled = false;
+                this.cameraZoom = value - 1;
+                this.cameraZoomTarget = value - 1;
+            }
         }
     }
 
