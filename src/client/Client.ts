@@ -2610,6 +2610,10 @@ export class Client extends GameShell {
             return;
         }
 
+        if (this.mainModalId !== -1) {
+            return;
+        }
+
         let line: number = 0;
         if (this.rebootTimer !== 0) {
             line = 1;
@@ -2632,7 +2636,12 @@ export class Client extends GameShell {
                 if ((type === 3 || type === 7) && (type === 7 || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
                     const y: number = 329 - line * 13;
 
-                    if (this.mouseX > 4 && this.mouseX < 516 && this.mouseY - 4 > y - 10 && this.mouseY - 4 <= y + 3) {
+                    let width: number = (this.p12?.stringWid('From:  ' + sender + this.chatText[i]) ?? 0) + 25;
+                    if (width > 450) {
+                        width = 450;
+                    }
+
+                    if (this.mouseX > 4 && this.mouseX < width + 4 && this.mouseY - 4 > y - 10 && this.mouseY - 4 <= y + 3) {
                         if (this.staffmodlevel) {
                             this.menuOption[this.menuNumEntries] = 'Report abuse @whi@' + sender;
                             this.menuAction[this.menuNumEntries] = MiniMenuAction._PRIORITY + MiniMenuAction.ABUSE_REPORT;
