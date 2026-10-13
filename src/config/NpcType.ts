@@ -1,4 +1,5 @@
 import LruCache from '#/datastruct/LruCache.js';
+import ObjType from '#/config/ObjType.js';
 
 import AnimFrame from '#/dash3d/AnimFrame.js';
 import Model from '#/dash3d/Model.js';
@@ -15,6 +16,7 @@ export default class NpcType {
     static recent: (NpcType | null)[] | null = null;
     static recentPos: number = 0;
     static modelCache: LruCache<Model> = new LruCache(30);
+    private static petHatGeometry = new WeakMap<Model, { vertices: Set<number>; brim: number[] }>();
 
     id: number = -1;
 
@@ -164,8 +166,9 @@ export default class NpcType {
         }
     }
 
-    getTempModel(primaryTransformId: number, secondaryTransformId: number, seqMask: Int32Array | null): Model | null {
-        let model = NpcType.modelCache.find(BigInt(this.id));
+    getTempModel(primaryTransformId: number, secondaryTransformId: number, seqMask: Int32Array | null, petHat: number = -1): Model | null {
+        const cacheKey = BigInt(this.id) + (BigInt(petHat + 1) << 32n);
+        let model = NpcType.modelCache.find(cacheKey);
 
         if (!model && this.model) {
             let ready = false;
@@ -196,9 +199,32 @@ export default class NpcType {
                     }
                 }
 
+                if (petHat !== -1) {
+                    const hat = ObjType.list(petHat).getModelUnlit(1);
+                    if (!hat) {
+                        return null;
+                    }
+                    hat.translate(-90, 0, -85);
+                    hat.vertexLabel = new Int32Array(hat.numPoints).fill(47);
+                    hat.faceLabel = null;
+                    hat.facePriority = null;
+                    hat.priority = 0;
+                    const firstHatFace = model.numFaces;
+                    model = Model.combineForAnim([model, hat], 2);
+                    const vertices = new Set<number>();
+                    for (let face = firstHatFace; face < model.numFaces; face++) {
+                        vertices.add(model.faceVertexA![face]);
+                        vertices.add(model.faceVertexB![face]);
+                        vertices.add(model.faceVertexC![face]);
+                    }
+                    const lowest = Math.max(...Array.from(vertices, vertex => model!.pointY![vertex]));
+                    const brim = Array.from(vertices).filter(vertex => model!.pointY![vertex] >= lowest - 4);
+                    NpcType.petHatGeometry.set(model, { vertices, brim });
+                }
+
                 model.prepareAnim();
                 model.calculateNormals(64, 850, -30, -50, -30, true);
-                NpcType.modelCache.put(model, BigInt(this.id));
+                NpcType.modelCache.put(model, cacheKey);
             }
         }
 
@@ -216,7 +242,35 @@ export default class NpcType {
         }
 
         if (this.resizeh !== 128 || this.resizev !== 128) {
-            tmp.resize(this.resizeh, this.resizev, this.resizeh);
+            const hat = NpcType.petHatGeometry.get(model);
+            if (hat) {
+                let x = 0, y = 0, z = 0;
+                for (const vertex of hat.brim) {
+                    x += tmp.pointX![vertex];
+                    y += tmp.pointY![vertex];
+                    z += tmp.pointZ![vertex];
+                }
+                x /= hat.brim.length;
+                y /= hat.brim.length;
+                z /= hat.brim.length;
+                const scale = this.resizeh * 1.125 / 128;
+                const anchorX = x * this.resizeh / 128;
+                const anchorY = y * this.resizev / 128;
+                const anchorZ = z * this.resizeh / 128;
+                for (let vertex = 0; vertex < tmp.numPoints; vertex++) {
+                    if (hat.vertices.has(vertex)) {
+                        tmp.pointX![vertex] = Math.round((tmp.pointX![vertex] - x) * scale + anchorX);
+                        tmp.pointY![vertex] = Math.round((tmp.pointY![vertex] - y) * scale + anchorY);
+                        tmp.pointZ![vertex] = Math.round((tmp.pointZ![vertex] - z) * scale + anchorZ);
+                    } else {
+                        tmp.pointX![vertex] = ((tmp.pointX![vertex] * this.resizeh) / 128) | 0;
+                        tmp.pointY![vertex] = ((tmp.pointY![vertex] * this.resizev) / 128) | 0;
+                        tmp.pointZ![vertex] = ((tmp.pointZ![vertex] * this.resizeh) / 128) | 0;
+                    }
+                }
+            } else {
+                tmp.resize(this.resizeh, this.resizev, this.resizeh);
+            }
         }
 
         tmp.calcBoundingCylinder();

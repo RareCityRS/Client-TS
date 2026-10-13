@@ -1,4 +1,6 @@
 export const enum ClientProt {
+    RESUME_P_STRINGDIALOG = 248,
+
     NO_TIMEOUT = 120, // index: 6 - NXT naming
 
     IDLE_TIMER = 209, // index: 30

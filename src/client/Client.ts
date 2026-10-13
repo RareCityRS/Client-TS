@@ -501,6 +501,8 @@ export class Client extends GameShell {
 
     private dialogInputOpen: boolean = false;
     private dialogInput: string = '';
+    private stringDialogPrompt: string | null = null;
+    private stringDialogId: number = 0;
 
     private reportAbuseInput: string = '';
     private reportAbuseMuteOption: boolean = false;
@@ -2267,6 +2269,12 @@ export class Client extends GameShell {
                             const src = this.objDragSlot;
                             const dst = this.hoveredSlot;
 
+                            const name = com.linkObjNames.get(src);
+                            com.linkObjNames.delete(src);
+                            com.linkObjNames.delete(dst);
+                            if (name) {
+                                com.linkObjNames.set(dst, name);
+                            }
                             com.linkObjType[dst] = com.linkObjType[src];
                             com.linkObjNumber[dst] = com.linkObjNumber[src];
                             com.linkObjType[src] = -1;
@@ -3052,7 +3060,7 @@ export class Client extends GameShell {
                             }
                         }
                     } else if (this.dialogInputOpen) {
-                        if (key >= 48 && key <= 57 && this.dialogInput.length < 10) {
+                        if (this.stringDialogPrompt !== null ? key >= 32 && key <= 126 && this.dialogInput.length < 128 : key >= 48 && key <= 57 && this.dialogInput.length < 10) {
                             this.dialogInput = this.dialogInput + String.fromCharCode(key);
                             this.redrawChat = true;
                         }
@@ -3063,7 +3071,12 @@ export class Client extends GameShell {
                         }
 
                         if (key === 13 || key === 10) {
-                            if (this.dialogInput.length > 0) {
+                            if (this.stringDialogPrompt !== null) {
+                                this.out.p1Enc(ClientProt.RESUME_P_STRINGDIALOG);
+                                this.out.p1(this.dialogInput.length + 5);
+                                this.out.p4(this.stringDialogId);
+                                this.out.pjstr(this.dialogInput);
+                            } else if (this.dialogInput.length > 0) {
                                 let value: number = 0;
                                 try {
                                     value = parseInt(this.dialogInput, 10);
@@ -3075,6 +3088,11 @@ export class Client extends GameShell {
                                 this.out.p4(value);
                             }
 
+                            this.dialogInputOpen = false;
+                            this.redrawChat = true;
+                        }
+                        if (key === 27 && this.stringDialogPrompt !== null) {
+                            this.out.p1Enc(ClientProt.CLOSE_MODAL);
                             this.dialogInputOpen = false;
                             this.redrawChat = true;
                         }
@@ -6301,9 +6319,26 @@ export class Client extends GameShell {
                 return true;
             }
 
+            if (this.ptype === ServerProt.UPDATE_INV_NAME) {
+                const inv = IfType.list[this.in.g2()];
+                const slot = this.in.g2();
+                const name = this.in.gjstr().replace(/@[a-z0-9]{3}@/gi, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 128);
+                if (inv?.linkObjType && slot < inv.linkObjType.length && inv.linkObjType[slot] > 0) {
+                    if (name) {
+                        inv.linkObjNames.set(slot, name);
+                    } else {
+                        inv.linkObjNames.delete(slot);
+                    }
+                    this.redrawSide = true;
+                }
+                this.ptype = -1;
+                return true;
+            }
+
             if (this.ptype === ServerProt.UPDATE_INV_STOP_TRANSMIT) {
                 const comId = this.in.g2();
                 const inv: IfType = IfType.list[comId];
+                inv.linkObjNames.clear();
 
                 if (!inv.linkObjType || !inv.linkObjNumber) {
                     throw new Error();
@@ -6324,6 +6359,7 @@ export class Client extends GameShell {
 
                 const comId: number = this.in.g2();
                 const inv: IfType = IfType.list[comId];
+                inv.linkObjNames.clear();
 
                 if (!inv.linkObjType || !inv.linkObjNumber) {
                     throw new Error();
@@ -6370,6 +6406,7 @@ export class Client extends GameShell {
                     }
 
                     if (slot >= 0 && slot < inv.linkObjType.length) {
+                        inv.linkObjNames.delete(slot);
                         inv.linkObjType[slot] = id;
                         inv.linkObjNumber[slot] = count;
                     }
@@ -6455,6 +6492,18 @@ export class Client extends GameShell {
                     this.camShake[i] = false;
                 }
 
+                this.ptype = -1;
+                return true;
+            }
+
+            if (this.ptype === ServerProt.NPC_NAME) {
+                const npc = this.npc[this.in.g2()];
+                const name = this.in.gjstr().replace(/@[a-z0-9]{3}@/gi, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 128);
+                const hat = this.in.g2() - 1;
+                if (npc) {
+                    npc.nameOverride = name || null;
+                    npc.petHat = [1038, 1040, 1042, 1044, 1046, 1048].includes(hat) ? hat : -1;
+                }
                 this.ptype = -1;
                 return true;
             }
@@ -6855,7 +6904,22 @@ export class Client extends GameShell {
                 return false;
             }
 
+            if (this.ptype === ServerProt.P_STRINGDIALOG) {
+                this.stringDialogId = this.in.g4();
+                this.stringDialogPrompt = this.in.gjstr();
+                this.socialInputOpen = false;
+                this.dialogInputOpen = true;
+                this.dialogInput = '';
+                this.redrawChat = true;
+                if (this.isMobile) {
+                    MobileKeyboard.show();
+                }
+                this.ptype = -1;
+                return true;
+            }
+
             if (this.ptype === ServerProt.P_COUNTDIALOG) {
+                this.stringDialogPrompt = null;
                 this.socialInputOpen = false;
                 this.dialogInputOpen = true;
                 this.dialogInput = '';
@@ -8203,6 +8267,8 @@ export class Client extends GameShell {
 
             if (npc) {
                 npc.cycle = Client.loopCycle;
+                npc.nameOverride = null;
+                npc.petHat = -1;
                 npc.type = NpcType.list(buf.gBit(11));
                 npc.size = npc.type.size;
                 npc.turnspeed = npc.type.turnspeed;
@@ -8314,6 +8380,8 @@ export class Client extends GameShell {
             }
 
             if ((mask & NpcUpdate.CHANGETYPE) !== 0) {
+                npc.nameOverride = null;
+                npc.petHat = -1;
                 npc.type = NpcType.list(buf.g2());
                 npc.size = npc.type.size;
                 npc.turnspeed = npc.type.turnspeed;
@@ -8647,6 +8715,9 @@ export class Client extends GameShell {
         }
 
         if (this.dialogInputOpen) {
+            if (this.stringDialogPrompt !== null) {
+                this.out.p1Enc(ClientProt.CLOSE_MODAL);
+            }
             this.dialogInputOpen = false;
             this.redrawChat = true;
         }
@@ -8812,7 +8883,9 @@ export class Client extends GameShell {
             if (npc && npc.type) {
                 let examine: string;
 
-                if (!npc.type.desc) {
+                if (npc.nameOverride) {
+                    examine = "It's a " + npc.nameOverride + '.';
+                } else if (!npc.type.desc) {
                     examine = "It's a " + npc.type.name + '.';
                 } else {
                     examine = npc.type.desc;
@@ -9095,7 +9168,10 @@ export class Client extends GameShell {
             const com = IfType.list[c];
             let examine: string;
 
-            if (com && com.linkObjNumber && com.linkObjNumber[b] >= 100000) {
+            const namedPet = com?.linkObjNames.get(b);
+            if (namedPet) {
+                examine = "It's a " + namedPet + '.';
+            } else if (com && com.linkObjNumber && com.linkObjNumber[b] >= 100000) {
                 examine = com.linkObjNumber[b] + ' x ' + obj.name;
             } else if (!obj.desc) {
                 examine = "It's a " + obj.name + '.';
@@ -9111,7 +9187,7 @@ export class Client extends GameShell {
             this.objSelectedSlot = b;
             this.objSelectedComId = c;
             this.objComId = a;
-            this.objSelectedName = ObjType.list(a).name;
+            this.objSelectedName = IfType.list[c]?.linkObjNames.get(b) ?? ObjType.list(a).name;
             this.targetMode = 0;
             this.redrawSide = true;
             return;
@@ -9569,7 +9645,7 @@ export class Client extends GameShell {
             return;
         }
 
-        let tooltip: string | null = npc.name;
+        let tooltip: string | null = this.npc[a]?.nameOverride ?? npc.name;
         if (npc.vislevel !== 0 && this.localPlayer) {
             tooltip = tooltip + this.combatColourCode(this.localPlayer.combatLevel, npc.vislevel) + ' (level-' + npc.vislevel + ')';
         }
@@ -9788,10 +9864,11 @@ export class Client extends GameShell {
                         }
 
                         const obj: ObjType = ObjType.list(child.linkObjType[slot] - 1);
+                        const objName = child.linkObjNames.get(slot) ?? obj.name;
 
                         if (this.useMode === 1 && child.objOps) {
                             if (child.id !== this.objSelectedComId || slot !== this.objSelectedSlot) {
-                                this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @lre@' + obj.name;
+                                this.menuOption[this.menuNumEntries] = 'Use ' + this.objSelectedName + ' with @lre@' + objName;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_ONHELD;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = slot;
@@ -9800,7 +9877,7 @@ export class Client extends GameShell {
                             }
                         } else if (this.targetMode === 1 && child.objOps) {
                             if ((this.targetMask & 0x10) === 16) {
-                                this.menuOption[this.menuNumEntries] = this.targetOp + ' @lre@' + obj.name;
+                                this.menuOption[this.menuNumEntries] = this.targetOp + ' @lre@' + objName;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.TGT_HELD;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = slot;
@@ -9811,7 +9888,7 @@ export class Client extends GameShell {
                             if (child.objOps) {
                                 for (let op: number = 4; op >= 3; op--) {
                                     if (obj.iop && obj.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + objName;
 
                                         if (op === 3) {
                                             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD4;
@@ -9824,7 +9901,7 @@ export class Client extends GameShell {
                                         this.menuParamC[this.menuNumEntries] = child.id;
                                         this.menuNumEntries++;
                                     } else if (op === 4) {
-                                        this.menuOption[this.menuNumEntries] = 'Drop @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = 'Drop @lre@' + objName;
                                         this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD5;
                                         this.menuParamA[this.menuNumEntries] = obj.id;
                                         this.menuParamB[this.menuNumEntries] = slot;
@@ -9835,7 +9912,7 @@ export class Client extends GameShell {
                             }
 
                             if (child.objUse) {
-                                this.menuOption[this.menuNumEntries] = 'Use @lre@' + obj.name;
+                                this.menuOption[this.menuNumEntries] = 'Use @lre@' + objName;
                                 this.menuAction[this.menuNumEntries] = MiniMenuAction.USEHELD_START;
                                 this.menuParamA[this.menuNumEntries] = obj.id;
                                 this.menuParamB[this.menuNumEntries] = slot;
@@ -9846,7 +9923,7 @@ export class Client extends GameShell {
                             if (child.objOps && obj.iop) {
                                 for (let op: number = 2; op >= 0; op--) {
                                     if (obj.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + objName;
 
                                         if (op === 0) {
                                             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD1;
@@ -9867,7 +9944,7 @@ export class Client extends GameShell {
                             if (child.iop) {
                                 for (let op: number = 4; op >= 0; op--) {
                                     if (child.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = child.iop[op] + ' @lre@' + obj.name;
+                                        this.menuOption[this.menuNumEntries] = child.iop[op] + ' @lre@' + objName;
 
                                         if (op === 0) {
                                             this.menuAction[this.menuNumEntries] = MiniMenuAction.INV_BUTTON1;
@@ -9889,7 +9966,7 @@ export class Client extends GameShell {
                                 }
                             }
 
-                            this.menuOption[this.menuNumEntries] = 'Examine @lre@' + obj.name;
+                            this.menuOption[this.menuNumEntries] = 'Examine @lre@' + objName;
                             this.menuAction[this.menuNumEntries] = MiniMenuAction.OP_HELD6;
                             this.menuParamA[this.menuNumEntries] = obj.id;
                             this.menuParamB[this.menuNumEntries] = slot;
@@ -11251,7 +11328,7 @@ export class Client extends GameShell {
             this.b12?.centreString(this.socialInputHeader, 239, 40, Colour.BLACK);
             this.b12?.centreString(this.socialInput + '*', 239, 60, Colour.DARKBLUE);
         } else if (this.dialogInputOpen) {
-            this.b12?.centreString('Enter amount:', 239, 40, Colour.BLACK);
+            this.b12?.centreString(this.stringDialogPrompt ?? 'Enter amount:', 239, 40, Colour.BLACK);
             this.b12?.centreString(this.dialogInput + '*', 239, 60, Colour.DARKBLUE);
         } else if (this.tutComMessage) {
             this.b12?.centreString(this.tutComMessage, 239, 40, Colour.BLACK);

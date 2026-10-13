@@ -462,6 +462,8 @@ export default abstract class GameShell {
             ch = 8;
         } else if (keyCode.code === 9) {
             ch = 9;
+        } else if (keyCode.code === 27) {
+            ch = 27;
         } else if (keyCode.code === 10) {
             ch = 10;
         }
@@ -522,6 +524,8 @@ export default abstract class GameShell {
             ch = 8;
         } else if (keyCode.code === 9) {
             ch = 9;
+        } else if (keyCode.code === 27) {
+            ch = 27;
         } else if (keyCode.code === 10) {
             ch = 10;
         }

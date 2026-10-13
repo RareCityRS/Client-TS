@@ -20,6 +20,28 @@ export const enum NpcUpdate {
 
 export default class ClientNpc extends ClientEntity {
     type: NpcType | null = null;
+    nameOverride: string | null = null;
+    petHat: number = -1;
+
+    override worldRender(yaw: number, sinEyePitch: number, cosEyePitch: number, sinEyeYaw: number, cosEyeYaw: number, relativeX: number, relativeY: number, relativeZ: number, typecode: number): void {
+        // catcity_felion / catcity_felion_cub in Content/pack/npc.pack.
+        if (this.type?.id !== 1370 && this.type?.id !== 1372) {
+            super.worldRender(yaw, sinEyePitch, cosEyePitch, sinEyeYaw, cosEyeYaw, relativeX, relativeY, relativeZ, typecode);
+            return;
+        }
+
+        const model = this.getTempModel();
+        if (model) {
+            this.minY = model.minY;
+            const useAABBMouseCheck = model.useAABBMouseCheck;
+            model.useAABBMouseCheck = false;
+            try {
+                model.worldRender(yaw, sinEyePitch, cosEyePitch, sinEyeYaw, cosEyeYaw, relativeX, relativeY, relativeZ, typecode);
+            } finally {
+                model.useAABBMouseCheck = useAABBMouseCheck;
+            }
+        }
+    }
 
     override getTempModel(): Model | null {
         if (this.type == null) {
@@ -78,7 +100,7 @@ export default class ClientNpc extends ClientEntity {
                 secondaryTransform = secondarySeq.frames[this.secondaryAnimFrame];
             }
 
-            return this.type.getTempModel(secondaryTransform, -1, null);
+            return this.type.getTempModel(secondaryTransform, -1, null, this.petHat);
         } else {
             const primarySeq = SeqType.list[this.primaryAnim];
             let primaryTransform = -1;
@@ -92,7 +114,7 @@ export default class ClientNpc extends ClientEntity {
                 secondaryTransform = secondarySeq.frames[this.secondaryAnimFrame];
             }
 
-            return this.type.getTempModel(primaryTransform, secondaryTransform, primarySeq.walkmerge);
+            return this.type.getTempModel(primaryTransform, secondaryTransform, primarySeq.walkmerge, this.petHat);
         }
     }
 

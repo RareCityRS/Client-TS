@@ -1,4 +1,8 @@
 export const enum ServerProt {
+    NPC_NAME = 246,
+    UPDATE_INV_NAME = 248,
+    P_STRINGDIALOG = 249,
+
     // interfaces
     IF_OPENCHAT = 166,
     IF_OPENMAIN_SIDE = 158,
@@ -121,6 +125,6 @@ export const ServerProtSizes = [
     0, 2, 0, 0, 0, 3, 0, 0, 0, 7,
     0, 0, 0, 0, 0, 0, 0, 2, 0, 0,
     0, 4, 0, 6, 0, -1, 0, 0, 0, 0,
-    2, 1, 0, 0, 0, 6, 0, 9, 0, 0,
+    2, 1, 0, 0, 0, 6, -1, 9, -1, -1,
     0, 0, 0, 0, 0, 0, 0
 ];

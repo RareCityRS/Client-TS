@@ -63,6 +63,7 @@ export default class IfType {
     childX: number[] | null = null;
     childY: number[] | null = null;
     linkObjType: Int32Array | null = null;
+    readonly linkObjNames = new Map<number, string>();
     linkObjNumber: Int32Array | null = null;
     objSwap: boolean = false;
     objOps: boolean = false;
@@ -348,6 +349,16 @@ export default class IfType {
     }
 
     swapSlots(src: number, dst: number) {
+        const srcName = this.linkObjNames.get(src);
+        const dstName = this.linkObjNames.get(dst);
+        this.linkObjNames.delete(src);
+        this.linkObjNames.delete(dst);
+        if (srcName) {
+            this.linkObjNames.set(dst, srcName);
+        }
+        if (dstName) {
+            this.linkObjNames.set(src, dstName);
+        }
         if (!this.linkObjType || !this.linkObjNumber) {
             return;
         }
