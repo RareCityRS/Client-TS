@@ -24,8 +24,8 @@ export default class ClientNpc extends ClientEntity {
     petHat: number = -1;
 
     override worldRender(yaw: number, sinEyePitch: number, cosEyePitch: number, sinEyeYaw: number, cosEyeYaw: number, relativeX: number, relativeY: number, relativeZ: number, typecode: number): void {
-        // catcity_felion / catcity_felion_cub in Content/pack/npc.pack.
-        if (this.type?.id !== 1370 && this.type?.id !== 1372) {
+        // catcity_felion / catcity_felion_cub / catcity_felion_enraged in Content/pack/npc.pack.
+        if (this.type?.id !== 1370 && this.type?.id !== 1372 && this.type?.id !== 1448) {
             super.worldRender(yaw, sinEyePitch, cosEyePitch, sinEyeYaw, cosEyeYaw, relativeX, relativeY, relativeZ, typecode);
             return;
         }
